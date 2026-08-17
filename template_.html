@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione DDT e Inventario Magazzino</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f6f9;
+            color: #333;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="date"], input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #219150;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #34495e;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .alert {
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+            margin-top: 10px;
+        }
+        .alert-success { background-color: #d4edda; color: #155724; }
+        .alert-error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Gestione Carico DDT e Inventario</h1>
+
+    <!-- Form Caricamento DDT -->
+    <div class="card">
+        <h2>Carica Nuovo DDT (PDF)</h2>
+        <form id="uploadForm">
+            <div class="form-group">
+                <label for="doc_number">Numero DDT:</label>
+                <input type="text" id="doc_number" required placeholder="Es. DDT-2026-001">
+            </div>
+            <div class="form-group">
+                <label for="doc_date">Data DDT:</label>
+                <input type="date" id="doc_date" required>
+            </div>
+            <div class="form-group">
+                <label for="ddtFile">Seleziona File PDF:</label>
+                <input type="file" id="ddtFile" accept=".pdf" required>
+            </div>
+            <button type="submit">Carica DDT e Aggiorna Inventario</button>
+        </form>
+        <div id="alertBox" class="alert"></div>
+    </div>
+
+    <!-- Tabella Inventario -->
+    <div class="card">
+        <h2>Stato Attuale Inventario</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Codice Articolo</th>
+                    <th>Descrizione</th>
+                    <th>Giacenza Disponibile</th>
+                    <th>U.M.</th>
+                    <th>Ultimo Aggiornamento</th>
+                </tr>
+            </thead>
+            <tbody id="inventarioBody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", caricaInventario);
+
+    document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const alertBox = document.getElementById('alertBox');
+        alertBox.style.display = 'none';
+
+        const fileInput = document.getElementById('ddtFile');
+        const docNumber = document.getElementById('doc_number').value;
+        const docDate = document.getElementById('doc_date').value;
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('doc_number', docNumber);
+        formData.append('doc_date', docDate);
+
+        try {
+            const response = await fetch('/api/upload-ddt', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alertBox.className = "alert alert-success";
+                alertBox.innerText = result.message;
+                alertBox.style.display = "block";
+                document.getElementById('uploadForm').reset();
+                caricaInventario();
+            } else {
+                alertBox.className = "alert alert-error";
+                alertBox.innerText = "Errore: " + result.error;
+                alertBox.style.display = "block";
+            }
+        } catch (err) {
+            alertBox.className = "alert alert-error";
+            alertBox.innerText = "Errore di connessione al server.";
+            alertBox.style.display = "block";
+        }
+    });
+
+    async function caricaInventario() {
+        try {
+            const res = await fetch('/api/inventario');
+            const dati = await res.json();
+            const tbody = document.getElementById('inventarioBody');
+            tbody.innerHTML = '';
+
+            if (dati.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nessun articolo in inventario.</td></tr>';
+                return;
+            }
+
+            dati.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${item.codice_articolo}</strong></td>
+                    <td>${item.descrizione || '-'}</td>
+                    <td>${item.quantita_disponibile}</td>
+                    <td>${item.unita_misura}</td>
+                    <td>${item.ultimo_aggiornamento}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error("Errore recupero inventario:", e);
+        }
+    }
+</script>
+
+</body>
+</html>
